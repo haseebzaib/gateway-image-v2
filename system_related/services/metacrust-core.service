@@ -1,0 +1,14 @@
+[Unit]
+Description=MetaCrust C++ gateway core
+After=metacrust-layout.service network-online.target
+Wants=metacrust-layout.service network-online.target
+ConditionFileIsExecutable=/opt/metacrust/bin/gateway-core
+
+[Service]
+Type=simple
+ExecStart=/opt/metacrust/bin/gateway-core
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

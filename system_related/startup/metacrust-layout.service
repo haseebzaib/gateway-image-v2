@@ -1,0 +1,14 @@
+[Unit]
+Description=Prepare MetaCrust persistent runtime layout
+DefaultDependencies=no
+After=local-fs.target persistent.mount
+Wants=persistent.mount
+Before=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/metacrust/bin/metacrust-layout.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

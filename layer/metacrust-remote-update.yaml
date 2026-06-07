@@ -1,0 +1,12 @@
+# METABEGIN
+# X-Env-Layer-Name: metacrust-remote-update
+# X-Env-Layer-Category: metacrust
+# X-Env-Layer-Desc: Raspberry Pi Connect OTA provisioning for A/B images
+# X-Env-Layer-Requires: metacrust-remote-access,rpi-connect-lite,rpi-connect-ota
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |-
+      set -eu
+      install -D -m 0755 "$SRCROOT/system_related/remote/metacrust-slot-status" "$1/opt/metacrust/bin/metacrust-slot-status"

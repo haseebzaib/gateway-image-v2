@@ -1,0 +1,15 @@
+[Unit]
+Description=MetaCrust Python gateway hub
+After=metacrust-layout.service metacrust-core.service
+Wants=metacrust-layout.service
+ConditionPathExists=/opt/metacrust/gateway_hub/main.py
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/metacrust/gateway_hub
+ExecStart=/usr/bin/python3 /opt/metacrust/gateway_hub/main.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

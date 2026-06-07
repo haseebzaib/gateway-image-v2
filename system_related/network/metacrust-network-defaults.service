@@ -1,0 +1,12 @@
+[Unit]
+Description=Bring up MetaCrust default network substrate
+After=systemd-networkd.service
+Wants=systemd-networkd.service systemd-resolved.service ModemManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/metacrust/bin/metacrust-network-defaults.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

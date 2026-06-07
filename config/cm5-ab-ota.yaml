@@ -1,0 +1,35 @@
+device:
+  layer: rpi-cm5
+  variant: 32G
+  storage_type: emmc
+  hostname: metacrust
+  user1: gateway
+  user1passhash: "$6$S65R/7doKrTNn5QH$yIyxA8w37IHiSXwKyVtLnIvJ/7MrUIi21.UyPkPe7yHnLu.Kgw7LvfdJm4QQkByDKcjreki4KScMJCi0Vaz4c."
+  user1sudo: nopasswd
+
+image:
+  layer: image-rota
+  name: metacrust-gateway-cm5-v2-ab
+  boot_part_size: 256M
+  system_part_size: 6144M
+  data_part_size: 8192M
+  rootfs_type: erofs
+
+layer:
+  base: metacrust-base
+  layout: metacrust-layout
+  network: metacrust-network-actuators
+  hardware: metacrust-cm5-hardware
+  services: metacrust-services
+  remote: metacrust-remote-access
+  ota: metacrust-remote-update
+
+locale:
+  timezone: Asia/Karachi
+  default: en_US.UTF-8
+  keyboard_layout: English (US)
+  keyboard_keymap: us
+
+ssh:
+  pubkey_user1: /home/hsb/.ssh/id_ed25519.pub
+  pubkey_only: y

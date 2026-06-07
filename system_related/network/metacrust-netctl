@@ -1,0 +1,100 @@
+#!/bin/bash
+set -euo pipefail
+
+KNOWN_UPLINKS="${KNOWN_UPLINKS:-eth0 eth1 wlan0 wwan0}"
+
+json_escape() {
+  printf '%s' "$1" | jq -Rsa .
+}
+
+require_iface() {
+  ip link show "$1" >/dev/null 2>&1 || {
+    printf '{"ok":false,"error":"missing_interface","interface":%s}\n' "$(json_escape "$1")"
+    exit 2
+  }
+}
+
+set_metric() {
+  local iface="$1" metric="$2"
+  require_iface "${iface}"
+  ip link set dev "${iface}" up
+  while read -r route; do
+    [ -n "${route}" ] || continue
+    ip route replace ${route} metric "${metric}" || true
+  done < <(ip -4 route show default dev "${iface}" | sed -E 's/[[:space:]]+metric[[:space:]]+[0-9]+//g')
+}
+
+prefer() {
+  local preferred="$1" metric
+  require_iface "${preferred}"
+  for iface in ${KNOWN_UPLINKS}; do
+    if ip link show "${iface}" >/dev/null 2>&1; then
+      if [ "${iface}" = "${preferred}" ]; then
+        metric=10
+      else
+        metric=500
+      fi
+      set_metric "${iface}" "${metric}"
+    fi
+  done
+  printf '{"ok":true,"action":"prefer","interface":%s}\n' "$(json_escape "${preferred}")"
+}
+
+wifi_scan() {
+  local iface="${1:-wlan0}"
+  require_iface "${iface}"
+  iw dev "${iface}" scan 2>/dev/null | awk '
+    /^BSS / { if (ssid != "" || bssid != "") emit(); bssid=$2; sub(/\(.*/, "", bssid); ssid=""; signal=""; freq="" }
+    /^[ \t]*SSID:/ { sub(/^[ \t]*SSID:[ \t]*/, ""); ssid=$0 }
+    /^[ \t]*signal:/ { signal=$2 }
+    /^[ \t]*freq:/ { freq=$2 }
+    function esc(s) { gsub(/\\/,"\\\\",s); gsub(/"/,"\\\"",s); return s }
+    function emit() {
+      if (count++) printf(",")
+      printf("{\"bssid\":\"%s\",\"ssid\":\"%s\",\"signal_dbm\":%s,\"frequency_mhz\":%s}", esc(bssid), esc(ssid), signal == "" ? 0 : signal, freq == "" ? 0 : freq)
+    }
+    END { printf("["); if (ssid != "" || bssid != "") emit(); printf("]\n") }
+  '
+}
+
+state() {
+  ip -j addr show
+}
+
+case "${1:-}" in
+  prefer|switch)
+    prefer "${2:-}"
+    ;;
+  metric)
+    set_metric "${2:-}" "${3:-500}"
+    printf '{"ok":true,"action":"metric","interface":%s,"metric":%s}\n' "$(json_escape "${2:-}")" "${3:-500}"
+    ;;
+  up)
+    require_iface "${2:-}"
+    ip link set dev "${2:-}" up
+    printf '{"ok":true,"action":"up","interface":%s}\n' "$(json_escape "${2:-}")"
+    ;;
+  down)
+    require_iface "${2:-}"
+    ip link set dev "${2:-}" down
+    printf '{"ok":true,"action":"down","interface":%s}\n' "$(json_escape "${2:-}")"
+    ;;
+  wifi-scan)
+    wifi_scan "${2:-wlan0}"
+    ;;
+  state)
+    state
+    ;;
+  *)
+    cat >&2 <<'EOF'
+Usage:
+  metacrust-netctl prefer <iface>
+  metacrust-netctl metric <iface> <metric>
+  metacrust-netctl up <iface>
+  metacrust-netctl down <iface>
+  metacrust-netctl wifi-scan [iface]
+  metacrust-netctl state
+EOF
+    exit 1
+    ;;
+esac

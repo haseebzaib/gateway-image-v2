@@ -1,0 +1,22 @@
+#!/bin/bash
+set -euo pipefail
+
+active_root="$(findmnt -n -o SOURCE / 2>/dev/null || true)"
+active_slot=""
+
+if command -v rpi-slot-label >/dev/null 2>&1; then
+  active_slot="$(rpi-slot-label active 2>/dev/null || true)"
+fi
+
+jq -n \
+  --arg active_root "${active_root}" \
+  --arg active_slot "${active_slot}" \
+  --arg bootfs "$(findmnt -n -o SOURCE /bootfs 2>/dev/null || true)" \
+  --arg persistent "$(findmnt -n -o SOURCE /persistent 2>/dev/null || true)" \
+  '{
+    active_root: $active_root,
+    active_slot: $active_slot,
+    bootfs: $bootfs,
+    persistent: $persistent,
+    by_slot: ("/dev/disk/by-slot" as $d | $d)
+  }'
