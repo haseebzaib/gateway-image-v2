@@ -7,7 +7,7 @@ Before=time-sync.target sysinit.target shutdown.target
 
 [Service]
 Type=oneshot
-ExecStart=/opt/metacrust/bin/gateway-cm5-rtc-load.sh
+ExecStart=/opt/metacrust/scripts/gateway-cm5-rtc-load.sh
 
 [Install]
 WantedBy=sysinit.target

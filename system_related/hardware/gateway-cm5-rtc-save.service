@@ -6,7 +6,7 @@ Wants=time-sync.target
 
 [Service]
 Type=oneshot
-ExecStart=/opt/metacrust/bin/gateway-cm5-rtc-save.sh
+ExecStart=/opt/metacrust/scripts/gateway-cm5-rtc-save.sh
 
 [Install]
 WantedBy=multi-user.target

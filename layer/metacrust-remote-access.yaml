@@ -11,6 +11,6 @@ mmdebstrap:
       set -eu
       chroot "$1" sh -c 'curl -fsSL https://tailscale.com/install.sh | sh'
       install -D -m 0600 "$SRCROOT/system_related/remote/tailscale.env" "$1/persistent/metacrust/secrets/tailscale.env"
-      install -D -m 0755 "$SRCROOT/system_related/remote/metacrust-tailscale-bootstrap.sh" "$1/opt/metacrust/bin/metacrust-tailscale-bootstrap.sh"
+      install -D -m 0755 "$SRCROOT/system_related/remote/metacrust-tailscale-bootstrap.sh" "$1/opt/metacrust/scripts/metacrust-tailscale-bootstrap.sh"
       install -D -m 0644 "$SRCROOT/system_related/remote/metacrust-tailscale-bootstrap.service" "$1/etc/systemd/system/metacrust-tailscale-bootstrap.service"
     - $BDEBSTRAP_HOOKS/enable-units "$1" tailscaled metacrust-tailscale-bootstrap

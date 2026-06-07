@@ -7,7 +7,7 @@ Before=multi-user.target
 
 [Service]
 Type=oneshot
-ExecStart=/opt/metacrust/bin/metacrust-layout.sh
+ExecStart=/opt/metacrust/scripts/metacrust-layout.sh
 RemainAfterExit=yes
 
 [Install]

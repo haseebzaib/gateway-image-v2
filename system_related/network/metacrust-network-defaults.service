@@ -5,7 +5,7 @@ Wants=systemd-networkd.service systemd-resolved.service ModemManager.service
 
 [Service]
 Type=oneshot
-ExecStart=/opt/metacrust/bin/metacrust-network-defaults.sh
+ExecStart=/opt/metacrust/scripts/metacrust-network-defaults.sh
 RemainAfterExit=yes
 
 [Install]

@@ -1,0 +1,14 @@
+# METABEGIN
+# X-Env-Layer-Name: metacrust-grow-rootfs
+# X-Env-Layer-Category: metacrust
+# X-Env-Layer-Desc: Grow ext4 root filesystem to fill boot media
+# X-Env-Layer-Requires: metacrust-layout
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |-
+      set -eu
+      install -D -m 0755 "$SRCROOT/system_related/startup/metacrust-grow-rootfs.sh" "$1/opt/metacrust/scripts/metacrust-grow-rootfs.sh"
+      install -D -m 0644 "$SRCROOT/system_related/startup/metacrust-grow-rootfs.service" "$1/etc/systemd/system/metacrust-grow-rootfs.service"
+    - $BDEBSTRAP_HOOKS/enable-units "$1" metacrust-grow-rootfs

@@ -37,17 +37,17 @@ No extra overlay is needed for these GPIO lines. They are controlled from usersp
 
 Helper script:
 
-- `/opt/metacrust/bin/gateway-cm5-ioctl`
-- `/opt/metacrust/bin/gateway-cm5-boot-chirp.sh`
+- `/opt/metacrust/scripts/gateway-cm5-ioctl`
+- `/opt/metacrust/scripts/gateway-cm5-boot-chirp.sh`
 
 Examples:
 
-- `sudo /opt/metacrust/bin/gateway-cm5-ioctl status`
-- `sudo /opt/metacrust/bin/gateway-cm5-ioctl in1`
-- `sudo /opt/metacrust/bin/gateway-cm5-ioctl out1 on`
-- `sudo /opt/metacrust/bin/gateway-cm5-ioctl buzzer on`
-- `sudo /opt/metacrust/bin/gateway-cm5-ioctl buzzer chirp`
-- `sudo /opt/metacrust/bin/gateway-cm5-ioctl user1 on`
+- `sudo /opt/metacrust/scripts/gateway-cm5-ioctl status`
+- `sudo /opt/metacrust/scripts/gateway-cm5-ioctl in1`
+- `sudo /opt/metacrust/scripts/gateway-cm5-ioctl out1 on`
+- `sudo /opt/metacrust/scripts/gateway-cm5-ioctl buzzer on`
+- `sudo /opt/metacrust/scripts/gateway-cm5-ioctl buzzer chirp`
+- `sudo /opt/metacrust/scripts/gateway-cm5-ioctl user1 on`
 
 Boot chirp:
 
@@ -57,8 +57,8 @@ Boot chirp:
 
 Verification:
 
-- `/opt/metacrust/bin/gateway-cm5-hardware-status.sh`
-- `/opt/metacrust/bin/gateway-cm5-ioctl status`
+- `/opt/metacrust/scripts/gateway-cm5-hardware-status.sh`
+- `/opt/metacrust/scripts/gateway-cm5-ioctl status`
 - `journalctl -u gateway-cm5-rtc-load.service -b`
 - `journalctl -u gateway-cm5-rtc-save.service -b`
 - `dmesg | grep -Ei 'ttyAMA|serial'`

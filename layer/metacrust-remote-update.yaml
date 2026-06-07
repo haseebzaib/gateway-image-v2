@@ -9,4 +9,4 @@ mmdebstrap:
   customize-hooks:
     - |-
       set -eu
-      install -D -m 0755 "$SRCROOT/system_related/remote/metacrust-slot-status" "$1/opt/metacrust/bin/metacrust-slot-status"
+      install -D -m 0755 "$SRCROOT/system_related/remote/metacrust-slot-status" "$1/opt/metacrust/scripts/metacrust-slot-status"

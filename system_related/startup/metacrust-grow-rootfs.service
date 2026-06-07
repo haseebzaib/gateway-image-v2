@@ -1,0 +1,14 @@
+[Unit]
+Description=Grow MetaCrust root filesystem
+After=local-fs.target systemd-udev-settle.service
+Before=metacrust-layout.service
+Wants=systemd-udev-settle.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/metacrust/scripts/metacrust-grow-rootfs.sh
+RemainAfterExit=yes
+TimeoutStartSec=3min
+
+[Install]
+WantedBy=multi-user.target

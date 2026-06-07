@@ -5,7 +5,7 @@ Wants=metacrust-layout.service
 
 [Service]
 Type=oneshot
-ExecStart=/opt/metacrust/bin/gateway-cm5-boot-chirp.sh
+ExecStart=/opt/metacrust/scripts/gateway-cm5-boot-chirp.sh
 
 [Install]
 WantedBy=multi-user.target

@@ -9,8 +9,8 @@ mmdebstrap:
   customize-hooks:
     - |-
       set -eu
-      install -D -m 0755 "$SRCROOT/system_related/network/metacrust-netctl" "$1/opt/metacrust/bin/metacrust-netctl"
-      install -D -m 0755 "$SRCROOT/system_related/network/metacrust-network-defaults.sh" "$1/opt/metacrust/bin/metacrust-network-defaults.sh"
+      install -D -m 0755 "$SRCROOT/system_related/network/metacrust-netctl" "$1/opt/metacrust/scripts/metacrust-netctl"
+      install -D -m 0755 "$SRCROOT/system_related/network/metacrust-network-defaults.sh" "$1/opt/metacrust/scripts/metacrust-network-defaults.sh"
       install -D -m 0644 "$SRCROOT/system_related/network/10-metacrust-eth0.network" "$1/etc/systemd/network/10-metacrust-eth0.network"
       install -D -m 0644 "$SRCROOT/system_related/network/11-metacrust-eth1.network" "$1/etc/systemd/network/11-metacrust-eth1.network"
       install -D -m 0644 "$SRCROOT/system_related/network/metacrust-network-defaults.service" "$1/etc/systemd/system/metacrust-network-defaults.service"

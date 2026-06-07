@@ -1,7 +1,7 @@
 # METABEGIN
 # X-Env-Layer-Name: metacrust-layout
 # X-Env-Layer-Category: metacrust
-# X-Env-Layer-Desc: MetaCrust /opt/metacrust layout and persistent backing store
+# X-Env-Layer-Desc: MetaCrust /opt/metacrust runtime layout
 # X-Env-Layer-Requires: metacrust-base
 # METAEND
 ---
@@ -10,15 +10,12 @@ mmdebstrap:
     - |-
       set -eu
       install -d -m 0755 "$1/opt/metacrust"
-      install -d -m 0755 "$1/opt/metacrust/bin"
-      install -d -m 0755 "$1/opt/metacrust/etc"
+      install -d -m 0755 "$1/opt/metacrust/scripts"
+      install -d -m 0755 "$1/opt/metacrust/gateway_core"
+      install -d -m 0755 "$1/opt/metacrust/gateway_hub"
       install -d -m 0755 "$1/persistent/metacrust"
-      install -d -m 0755 "$1/persistent/metacrust/state"
-      install -d -m 0755 "$1/persistent/metacrust/log"
       install -d -m 0700 "$1/persistent/metacrust/secrets"
-      ln -sfn /persistent/metacrust/state "$1/opt/metacrust/state"
-      ln -sfn /persistent/metacrust/log "$1/opt/metacrust/log"
       ln -sfn /persistent/metacrust/secrets "$1/opt/metacrust/secrets"
-      install -D -m 0755 "$SRCROOT/system_related/startup/metacrust-layout.sh" "$1/opt/metacrust/bin/metacrust-layout.sh"
+      install -D -m 0755 "$SRCROOT/system_related/startup/metacrust-layout.sh" "$1/opt/metacrust/scripts/metacrust-layout.sh"
       install -D -m 0644 "$SRCROOT/system_related/startup/metacrust-layout.service" "$1/etc/systemd/system/metacrust-layout.service"
     - $BDEBSTRAP_HOOKS/enable-units "$1" metacrust-layout

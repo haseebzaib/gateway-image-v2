@@ -2,11 +2,11 @@
 Description=MetaCrust C++ gateway core
 After=metacrust-layout.service network-online.target
 Wants=metacrust-layout.service network-online.target
-ConditionFileIsExecutable=/opt/metacrust/bin/gateway-core
+ConditionFileIsExecutable=/opt/metacrust/gateway_core/gateway-core
 
 [Service]
 Type=simple
-ExecStart=/opt/metacrust/bin/gateway-core
+ExecStart=/opt/metacrust/gateway_core/gateway-core
 Restart=always
 RestartSec=5
 

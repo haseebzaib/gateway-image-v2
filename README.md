@@ -11,6 +11,7 @@ The image should stay boring:
 - Keep Tailscale available independently from gateway services.
 - Bring Ethernet, Wi-Fi, cellular interfaces, and standard managers up.
 - Provide small privileged actuator scripts for `gateway_core`.
+- Grow CM5 normal-image root filesystem to fill eMMC.
 
 The image should not own runtime policy. Network monitoring, uplink selection,
 anomaly detection, history, and recovery decisions belong in `gateway_core`.
@@ -18,12 +19,10 @@ anomaly detection, history, and recovery decisions belong in `gateway_core`.
 ## Runtime Layout
 
 ```text
-/opt/metacrust/bin        executables and actuator scripts
-/opt/metacrust/etc        default/static config shipped in image
-/opt/metacrust/state      runtime state target for future gateway_core
-/opt/metacrust/log        log target for future gateway_core
-/opt/metacrust/secrets    device secrets, including tailscale.env
-/persistent/metacrust     persistent backing store when persistent partition exists
+/opt/metacrust/scripts       shell actuator scripts
+/opt/metacrust/gateway_core  future C++ application
+/opt/metacrust/gateway_hub   future Python application
+/opt/metacrust/secrets       device secrets, including tailscale.env
 ```
 
 ## Build
@@ -32,6 +31,12 @@ From `gateway_prj/rpi-image-gen`:
 
 ```bash
 ./rpi-image-gen build -S ./gateway-image-v2 -c cm5-dev.yaml
+```
+
+For Raspberry Pi 4 Model B testing:
+
+```bash
+./rpi-image-gen build -S ./gateway-image-v2 -c pi4-dev.yaml
 ```
 
 Optional A/B OTA image, for later:

@@ -6,7 +6,7 @@ Wants=network-online.target tailscaled.service
 [Service]
 Type=oneshot
 EnvironmentFile=-/opt/metacrust/secrets/tailscale.env
-ExecStart=/opt/metacrust/bin/metacrust-tailscale-bootstrap.sh
+ExecStart=/opt/metacrust/scripts/metacrust-tailscale-bootstrap.sh
 Restart=on-failure
 RestartSec=30
 
