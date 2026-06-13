@@ -66,6 +66,8 @@ mmdebstrap:
     - libsqlite3-dev
     - redis
     - redis-server
+    - sqlcipher
+    - libsqlcipher-dev
     - libmodbus-dev
     - libserialport-dev
     - libi2c-dev
@@ -89,6 +91,7 @@ mmdebstrap:
 
     - python3
     - python3-fastapi
+    - python3-httpx
     - python3-jinja2
     - python3-uvicorn
     - python3-itsdangerous
@@ -98,5 +101,6 @@ mmdebstrap:
   customize-hooks:
     - |-
       set -eu
+      chroot "$1" python3 -m pip install --break-system-packages --no-cache-dir 'sqlcipher3>=0.6,<1.0'
       install -d -m 0755 "$1/etc/sudoers.d"
       install -D -m 0440 "$SRCROOT/system_related/sudoers/gateway-metacrust" "$1/etc/sudoers.d/gateway-metacrust"

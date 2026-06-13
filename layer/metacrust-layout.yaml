@@ -15,7 +15,10 @@ mmdebstrap:
       install -d -m 0755 "$1/opt/metacrust/gateway_hub"
       install -d -m 0755 "$1/persistent/metacrust"
       install -d -m 0700 "$1/persistent/metacrust/secrets"
+      install -d -m 0700 "$1/persistent/metacrust/data"
+      install -d -m 0700 "$1/persistent/metacrust/data/edge_server"
       ln -sfn /persistent/metacrust/secrets "$1/opt/metacrust/secrets"
+      ln -sfn /persistent/metacrust/data "$1/opt/metacrust/data"
       install -D -m 0755 "$SRCROOT/system_related/startup/metacrust-layout.sh" "$1/opt/metacrust/scripts/metacrust-layout.sh"
       install -D -m 0644 "$SRCROOT/system_related/startup/metacrust-layout.service" "$1/etc/systemd/system/metacrust-layout.service"
     - $BDEBSTRAP_HOOKS/enable-units "$1" metacrust-layout

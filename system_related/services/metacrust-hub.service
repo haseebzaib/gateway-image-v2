@@ -7,6 +7,7 @@ ConditionPathExists=/opt/metacrust/gateway_hub/main.py
 [Service]
 Type=simple
 WorkingDirectory=/opt/metacrust/gateway_hub
+EnvironmentFile=-/opt/metacrust/secrets/gateway-hub.env
 ExecStart=/usr/bin/python3 /opt/metacrust/gateway_hub/main.py
 Restart=always
 RestartSec=5
