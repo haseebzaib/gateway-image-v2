@@ -14,6 +14,7 @@ image:
 layer:
   base: metacrust-base
   layout: metacrust-layout
+  grow_rootfs: metacrust-grow-rootfs
   network: metacrust-network-actuators
   services: metacrust-services
   remote: metacrust-remote-access
