@@ -64,6 +64,43 @@ json_escape() {
   printf '%s' "$1" | jq -Rsa .
 }
 
+# Most common country IE among visible APs ("" if none). Access points
+# broadcast their regulatory country (802.11d); the neighbourhood is the best
+# guess for where this gateway physically sits — no user input needed.
+detect_wifi_country() {
+  ip link set wlan0 up >/dev/null 2>&1 || true
+  iw dev wlan0 scan 2>/dev/null \
+    | awk '/Country:/ {print $2}' \
+    | grep -E '^[A-Z]{2}$' \
+    | sort | uniq -c | sort -rn \
+    | awk 'NR==1 {print $2}'
+}
+
+WIFI_COUNTRY_RESOLVED=""
+WIFI_COUNTRY_SCANNED="false"
+resolve_wifi_country() {
+  # $1 = configured value ("", "null", "auto", or a 2-letter code).
+  # Empty/auto -> detect from surrounding APs (scanned once per apply).
+  local configured
+  configured="$(printf '%s' "${1:-}" | tr '[:lower:]' '[:upper:]')"
+  case "${configured}" in
+    ""|NULL|AUTO)
+      if [ "${WIFI_COUNTRY_SCANNED}" != "true" ]; then
+        WIFI_COUNTRY_RESOLVED="$(detect_wifi_country || true)"
+        WIFI_COUNTRY_SCANNED="true"
+        log "wifi country auto-detect: '${WIFI_COUNTRY_RESOLVED:-none found}'"
+      fi
+      printf '%s' "${WIFI_COUNTRY_RESOLVED}"
+      ;;
+    [A-Z][A-Z])
+      printf '%s' "${configured}"
+      ;;
+    *)
+      printf ''
+      ;;
+  esac
+}
+
 write_result() {
   local ok="$1" status="$2" used_defaults="$3" active_uplink="$4" errors_json="$5" warnings_json="$6"
   write_json_file "${RESULT_FILE}" <<EOF
@@ -317,12 +354,22 @@ generate_wifi_client_files() {
   passphrase="$(jq -r '.network.wifi_client.passphrase' "${ACTIVE_SETTINGS}")"
   ssid="$(jq -r '.network.wifi_client.ssid' "${ACTIVE_SETTINGS}")"
   hidden="$(jq -r '.network.wifi_client.hidden_ssid' "${ACTIVE_SETTINGS}")"
-  country="$(jq -r '.network.wifi_client.country_code' "${ACTIVE_SETTINGS}")"
+  country="$(resolve_wifi_country "$(jq -r '.network.wifi_client.country_code // ""' "${ACTIVE_SETTINGS}")")"
+  local country_line=""
+  if [ -n "${country}" ]; then
+    iw reg set "${country}" >/dev/null 2>&1 || true
+    country_line="country=${country}"
+  else
+    # World domain: the client can still associate on any channel (passive
+    # scan hears the AP's beacons) and the kernel then adapts from the AP's
+    # own 802.11d country advertisement. Never blocks a connection.
+    iw reg set 00 >/dev/null 2>&1 || true
+  fi
 
   cat > "${GENERATED_DIR}/wpa_supplicant/wpa_supplicant-wlan0.conf" <<EOF
 ctrl_interface=DIR=/run/wpa_supplicant GROUP=netdev
 update_config=0
-country=${country}
+${country_line}
 
 network={
     ssid=$(json_escape "${ssid}")
@@ -363,7 +410,12 @@ generate_wifi_ap_files() {
   ssid="$(jq -r '.network.wifi_ap.ssid' "${ACTIVE_SETTINGS}")"
   security="$(jq -r '.network.wifi_ap.security' "${ACTIVE_SETTINGS}")"
   passphrase="$(jq -r '.network.wifi_ap.passphrase' "${ACTIVE_SETTINGS}")"
-  country="$(jq -r '.network.wifi_ap.country_code' "${ACTIVE_SETTINGS}")"
+  country="$(resolve_wifi_country "$(jq -r '.network.wifi_ap.country_code // ""' "${ACTIVE_SETTINGS}")")"
+  local ap_country_lines="ieee80211d=0"
+  if [ -n "${country}" ]; then
+    ap_country_lines="country_code=${country}
+ieee80211d=1"
+  fi
   band="$(jq -r '.network.wifi_ap.band' "${ACTIVE_SETTINGS}")"
   channel="$(jq -r '.network.wifi_ap.channel' "${ACTIVE_SETTINGS}")"
   subnet="$(jq -r '.network.wifi_ap.subnet_cidr' "${ACTIVE_SETTINGS}")"
@@ -383,10 +435,9 @@ generate_wifi_ap_files() {
 interface=wlan0
 driver=nl80211
 ssid=${ssid}
-country_code=${country}
+${ap_country_lines}
 hw_mode=${hw_mode}
 channel=${hostapd_channel}
-ieee80211d=1
 ieee80211n=1
 auth_algs=1
 ignore_broadcast_ssid=0
