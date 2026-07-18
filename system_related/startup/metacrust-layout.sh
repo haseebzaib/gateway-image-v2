@@ -8,10 +8,11 @@ install -d -m 0755 "${BASE_DIR}" "${BASE_DIR}/scripts" "${BASE_DIR}/gateway_core
 install -d -m 0755 "${PERSISTENT_DIR}"
 install -d -m 0700 "${PERSISTENT_DIR}/secrets"
 install -d -m 0700 "${PERSISTENT_DIR}/data" "${PERSISTENT_DIR}/data/edge_server"
-install -d -m 0755 "${PERSISTENT_DIR}/log" "${PERSISTENT_DIR}/state"
+install -d -m 0755 "${PERSISTENT_DIR}/config" "${PERSISTENT_DIR}/log" "${PERSISTENT_DIR}/state"
 
 ln -sfn "${PERSISTENT_DIR}/secrets" "${BASE_DIR}/secrets"
 ln -sfn "${PERSISTENT_DIR}/data" "${BASE_DIR}/data"
+ln -sfn "${PERSISTENT_DIR}/config" "${BASE_DIR}/config"
 ln -sfn "${PERSISTENT_DIR}/log" "${BASE_DIR}/log"
 ln -sfn "${PERSISTENT_DIR}/state" "${BASE_DIR}/state"
 

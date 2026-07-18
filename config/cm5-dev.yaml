@@ -17,7 +17,7 @@ layer:
   base: metacrust-base
   layout: metacrust-layout
   grow_rootfs: metacrust-grow-rootfs
-  network: metacrust-network-actuators
+  network: metacrust-network-runtime
   hardware: metacrust-cm5-hardware
   services: metacrust-services
   remote: metacrust-remote-access

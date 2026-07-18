@@ -1,0 +1,13 @@
+[Unit]
+Description=MetaCrust gateway network monitor
+Requires=metacrust-layout.service
+After=metacrust-layout.service gateway-network-apply.service
+
+[Service]
+Type=simple
+ExecStart=/opt/metacrust/scripts/gateway-network-monitor.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

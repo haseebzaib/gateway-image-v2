@@ -1,0 +1,15 @@
+[Unit]
+Description=MetaCrust gateway network apply service
+Requires=metacrust-layout.service
+After=metacrust-layout.service systemd-networkd.service network-pre.target
+Wants=systemd-networkd.service systemd-resolved.service ModemManager.service network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/metacrust/scripts/gateway-network-apply.sh
+ExecReload=/opt/metacrust/scripts/gateway-network-apply.sh
+ExecStartPost=/usr/bin/systemctl --no-block start gateway-network-monitor.service
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

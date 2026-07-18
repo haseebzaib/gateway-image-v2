@@ -1,0 +1,573 @@
+#!/bin/bash
+# gateway-cellular-qmi
+#
+# SIM7600/QMI helper for the gateway network scripts. It owns modem probing,
+# QMI connect attempts, DHCP on wwan0, and cellular runtime state.
+#
+set -euo pipefail
+
+LOG_TAG="gateway-cellular-qmi"
+BASE_DIR="/opt/metacrust"
+NETWORK_DIR="${BASE_DIR}/state/network"
+STORAGE_DIR="${BASE_DIR}/config/network"
+ACTIVE_SETTINGS="${STORAGE_DIR}/config.json"
+CELLULAR_STATE_FILE="${NETWORK_DIR}/cellular-state.json"
+CELLULAR_SESSION_FILE="${NETWORK_DIR}/cellular-session.env"
+
+DEFAULT_MODEM_ID="sim7600"
+DEFAULT_CONTROL_DEVICE="/dev/cdc-wdm0"
+DEFAULT_DATA_INTERFACE="wwan0"
+DEFAULT_ROUTE_METRIC="500"
+
+log() {
+  logger -t "${LOG_TAG}" "$*"
+  printf '%s\n' "$*"
+}
+
+one_line() {
+  tr '\r\n' '  ' | sed 's/[[:space:]][[:space:]]*/ /g' | cut -c1-240
+}
+
+json_escape() {
+  printf '%s' "$1" | jq -Rsa .
+}
+
+write_json_file() {
+  local target="$1"
+  local tmp
+  install -d -m 0755 "$(dirname "${target}")"
+  tmp="$(mktemp "${target}.tmp.XXXXXX")"
+  cat > "${tmp}"
+  mv "${tmp}" "${target}"
+}
+
+setting() {
+  local jq_expr="$1" fallback="$2"
+  if [ -f "${ACTIVE_SETTINGS}" ]; then
+    jq -r "${jq_expr} // \"${fallback}\"" "${ACTIVE_SETTINGS}" 2>/dev/null || printf '%s\n' "${fallback}"
+  else
+    printf '%s\n' "${fallback}"
+  fi
+}
+
+cellular_enabled() {
+  setting '.network.cellular.enabled' 'false'
+}
+
+active_modem_id() {
+  setting '.network.cellular.active_modem_id' "${DEFAULT_MODEM_ID}"
+}
+
+modem_setting() {
+  local field="$1" fallback="$2" modem_id
+  modem_id="$(active_modem_id)"
+  if [ -f "${ACTIVE_SETTINGS}" ]; then
+    jq -r --arg id "${modem_id}" --arg field "${field}" --arg fallback "${fallback}" '
+      .network.cellular as $cell
+      | (($cell.modems // []) | map(select(.id == $id)) | first // {}) as $modem
+      | ($cell[$field] // $modem[$field] // $fallback)
+    ' "${ACTIVE_SETTINGS}" 2>/dev/null || printf '%s\n' "${fallback}"
+  else
+    printf '%s\n' "${fallback}"
+  fi
+}
+
+control_device() { modem_setting "control_device" "${DEFAULT_CONTROL_DEVICE}"; }
+data_interface() { modem_setting "data_interface" "${DEFAULT_DATA_INTERFACE}"; }
+route_metric() { modem_setting "route_metric" "${DEFAULT_ROUTE_METRIC}"; }
+apn() { modem_setting "apn" ""; }
+username() { modem_setting "username" ""; }
+password() { modem_setting "password" ""; }
+pin() { modem_setting "pin" ""; }
+ip_type() { modem_setting "ip_type" "4"; }
+
+bool_json() { [ "$1" = "true" ] && printf true || printf false; }
+
+iface_address() {
+  ip -4 -o addr show dev "$1" 2>/dev/null | awk '{print $4}' | head -n1
+}
+
+iface_gateway() {
+  ip -4 route show default dev "$1" 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="via"){print $(i+1); exit}}'
+}
+
+iface_dns_json() {
+  local iface="$1"
+  {
+    if command -v resolvectl >/dev/null 2>&1; then
+      resolvectl dns "${iface}" 2>/dev/null | awk -F: '{print $2}' | tr ' ' '\n'
+    fi
+    awk '/^nameserver[[:space:]]+/ {print $2}' /etc/resolv.conf 2>/dev/null || true
+  } | awk 'NF && !seen[$0]++' | jq -Rsc 'split("\n") | map(select(length > 0))'
+}
+
+iface_stat() {
+  local iface="$1" stat_name="$2" path
+  path="/sys/class/net/${iface}/statistics/${stat_name}"
+  [ -r "${path}" ] && cat "${path}" || printf '0\n'
+}
+
+modem_present() {
+  local device="$1" iface="$2"
+  [ -e "${device}" ] && ip link show "${iface}" >/dev/null 2>&1
+}
+
+qmi() {
+  local device="$1"
+  shift
+  qmicli -d "${device}" --device-open-proxy "$@"
+}
+
+card_status() {
+  local device="$1" output
+  output="$(qmi "${device}" --uim-get-card-status 2>&1 || true)"
+  if printf '%s\n' "${output}" | grep -qi "Card state: 'present'"; then
+    if printf '%s\n' "${output}" | grep -Eqi "PIN1 state: '(disabled|enabled-verified)'"; then
+      printf 'ready\n'
+    elif printf '%s\n' "${output}" | grep -Eqi "PIN1 state: 'enabled-not-verified'"; then
+      printf 'locked\n'
+    else
+      printf 'present\n'
+    fi
+  elif printf '%s\n' "${output}" | grep -Eqi "Card state: '(absent|error)'"; then
+    printf 'missing\n'
+  else
+    printf 'unknown\n'
+  fi
+}
+
+serving_system() {
+  local device="$1"
+  qmi "${device}" --nas-get-serving-system 2>&1 || true
+}
+
+signal_dbm() {
+  local device="$1" output dbm
+  output="$(qmi "${device}" --nas-get-signal-strength 2>&1 || true)"
+  dbm="$(printf '%s\n' "${output}" | awk -F"'" '
+    /Current:/ && $2 ~ /^-?[0-9]+ dBm/ {
+      split($2, a, " ")
+      print a[1]
+      exit
+    }
+    /Network .*dBm/ && $4 ~ /^-?[0-9]+ dBm/ {
+      split($4, a, " ")
+      print a[1]
+      exit
+    }
+    /RSSI:/ && $2 ~ /^-?[0-9]+ dBm/ {
+      split($2, a, " ")
+      print a[1]
+      exit
+    }
+  ')"
+  if printf '%s' "${dbm}" | grep -Eq '^-?[0-9]+$'; then
+    printf '%s\n' "${dbm}"
+  else
+    printf -- '-110\n'
+  fi
+}
+
+signal_percent_from_dbm() {
+  local dbm="$1" pct
+  if printf '%s' "${dbm}" | grep -Eq '^-?[0-9]+$'; then
+    pct=$(( (dbm + 110) * 2 ))
+    [ "${pct}" -lt 0 ] && pct=0
+    [ "${pct}" -gt 100 ] && pct=100
+    printf '%s\n' "${pct}"
+  else
+    printf '0\n'
+  fi
+}
+
+qmi_single_quote_value() {
+  local output="$1" label="$2"
+  printf '%s\n' "${output}" | awk -v label="${label}" -F"'" '$0 ~ label {print $2; exit}'
+}
+
+modem_manufacturer() {
+  local device="$1" output
+  output="$(qmi "${device}" --dms-get-manufacturer 2>&1 || true)"
+  qmi_single_quote_value "${output}" "Manufacturer:"
+}
+
+modem_model() {
+  local device="$1" output
+  output="$(qmi "${device}" --dms-get-model 2>&1 || true)"
+  qmi_single_quote_value "${output}" "Model:"
+}
+
+modem_revision() {
+  local device="$1" output
+  output="$(qmi "${device}" --dms-get-revision 2>&1 || true)"
+  qmi_single_quote_value "${output}" "Revision:"
+}
+
+operator_name() {
+  local serving="$1"
+  printf '%s\n' "${serving}" | awk -F"'" '
+    /Current PLMN:/ { in_plmn = 1; next }
+    in_plmn && /Description:/ { print $2; found = 1; exit }
+    in_plmn && /MCC:/ { mcc = $2 }
+    in_plmn && /MNC:/ { mnc = $2 }
+    END {
+      if (!found && (mcc != "" || mnc != "")) {
+        printf "MCC %s MNC %s", mcc, mnc
+      }
+    }
+  '
+}
+
+registration_state() {
+  local serving="$1"
+  printf '%s\n' "${serving}" | awk -F"'" '/Registration state:/ {print $2; exit}'
+}
+
+registered_state() {
+  local serving="$1"
+  if printf '%s\n' "${serving}" | grep -Eqi "Registration state: '(registered|roaming)'"; then
+    printf true
+  else
+    printf false
+  fi
+}
+
+access_technology() {
+  local serving="$1"
+  printf '%s\n' "${serving}" | awk -F"'" '
+    /Radio interfaces:/ { in_radio = 1; next }
+    in_radio && /\[[0-9]+\]:/ { print $2; found = 1; exit }
+    /Data service capabilities:/ { in_data = 1; next }
+    in_data && /\[[0-9]+\]:/ { print $2; found = 1; exit }
+    END {
+      if (!found) {
+        print ""
+      }
+    }
+  '
+}
+
+internet_ok() {
+  local iface="$1"
+  [ -n "$(iface_address "${iface}")" ] || return 1
+  ping -I "${iface}" -c 1 -W 2 1.1.1.1 >/dev/null 2>&1 || \
+    ping -I "${iface}" -c 1 -W 2 8.8.8.8 >/dev/null 2>&1
+}
+
+previous_state_value() {
+  local jq_expr="$1" fallback="$2"
+  if [ -f "${CELLULAR_STATE_FILE}" ]; then
+    jq -r "${jq_expr} // \"${fallback}\"" "${CELLULAR_STATE_FILE}" 2>/dev/null || printf '%s\n' "${fallback}"
+  else
+    printf '%s\n' "${fallback}"
+  fi
+}
+
+write_state() {
+  local enabled="$1" present="$2" connected="$3" sim_status="$4" last_error="$5"
+  local event="${6:-}"
+  local device iface serving operator reg_state registered roaming access address gateway dns rx tx sig_dbm sig_pct inet
+  local manufacturer model revision rx_base tx_base session_rx session_tx last_connect last_disconnect
+
+  device="$(control_device)"
+  iface="$(data_interface)"
+  serving=""
+  operator=""
+  reg_state="unknown"
+  registered="false"
+  roaming="false"
+  access=""
+  manufacturer=""
+  model=""
+  revision=""
+  sig_dbm="0"
+  sig_pct="0"
+  address=""
+  gateway=""
+  dns="[]"
+  rx="0"
+  tx="0"
+  rx_base="0"
+  tx_base="0"
+  session_rx="0"
+  session_tx="0"
+  inet="false"
+  last_connect="$(previous_state_value '.last_connect_timestamp' '')"
+  last_disconnect="$(previous_state_value '.last_disconnect_timestamp' '')"
+
+  if [ "${present}" = "true" ]; then
+    manufacturer="$(modem_manufacturer "${device}")"
+    model="$(modem_model "${device}")"
+    revision="$(modem_revision "${device}")"
+    serving="$(serving_system "${device}")"
+    operator="$(operator_name "${serving}")"
+    reg_state="$(registration_state "${serving}")"
+    reg_state="${reg_state:-unknown}"
+    registered="$(registered_state "${serving}")"
+    [ "${reg_state}" = "roaming" ] && roaming="true"
+    access="$(access_technology "${serving}")"
+    sig_dbm="$(signal_dbm "${device}")"
+    sig_pct="$(signal_percent_from_dbm "${sig_dbm}")"
+    address="$(iface_address "${iface}")"
+    gateway="$(iface_gateway "${iface}")"
+    dns="$(iface_dns_json "${iface}")"
+    rx="$(iface_stat "${iface}" rx_bytes)"
+    tx="$(iface_stat "${iface}" tx_bytes)"
+    internet_ok "${iface}" && inet="true" || inet="false"
+  fi
+
+  if [ -f "${CELLULAR_SESSION_FILE}" ]; then
+    # shellcheck disable=SC1090
+    . "${CELLULAR_SESSION_FILE}" >/dev/null 2>&1 || true
+    last_connect="${CONNECT_TIMESTAMP:-${last_connect}}"
+    rx_base="${RX_BASE:-0}"
+    tx_base="${TX_BASE:-0}"
+  fi
+  if [ "${event}" = "connect" ]; then
+    last_connect="$(date --iso-8601=seconds)"
+  elif [ "${event}" = "disconnect" ]; then
+    last_disconnect="$(date --iso-8601=seconds)"
+  fi
+  session_rx=$((rx - rx_base))
+  session_tx=$((tx - tx_base))
+  [ "${session_rx}" -lt 0 ] && session_rx=0
+  [ "${session_tx}" -lt 0 ] && session_tx=0
+
+  write_json_file "${CELLULAR_STATE_FILE}" <<EOF
+{
+  "timestamp": "$(date --iso-8601=seconds)",
+  "enabled": $(bool_json "${enabled}"),
+  "present": $(bool_json "${present}"),
+  "backend": "qmi",
+  "interface": $(json_escape "${iface}"),
+  "control_device": $(json_escape "${device}"),
+  "modem_manufacturer": $(json_escape "${manufacturer}"),
+  "modem_model": $(json_escape "${model}"),
+  "modem_revision": $(json_escape "${revision}"),
+  "sim_status": $(json_escape "${sim_status}"),
+  "operator": $(json_escape "${operator}"),
+  "signal_dbm": ${sig_dbm:-0},
+  "signal_percent": ${sig_pct:-0},
+  "registration_state": $(json_escape "${reg_state}"),
+  "registered": $(bool_json "${registered}"),
+  "roaming": $(bool_json "${roaming}"),
+  "access_technology": $(json_escape "${access}"),
+  "connected": $(bool_json "${connected}"),
+  "address": $(json_escape "${address}"),
+  "gateway": $(json_escape "${gateway}"),
+  "dns": ${dns},
+  "internet_ok": $(bool_json "${inet}"),
+  "rx_bytes": ${rx:-0},
+  "tx_bytes": ${tx:-0},
+  "session_rx_bytes": ${session_rx:-0},
+  "session_tx_bytes": ${session_tx:-0},
+  "last_connect_timestamp": $(json_escape "${last_connect}"),
+  "last_disconnect_timestamp": $(json_escape "${last_disconnect}"),
+  "last_error": $(json_escape "${last_error}")
+}
+EOF
+}
+
+refresh_state() {
+  local enabled device iface present sim_status connected
+  enabled="$(cellular_enabled)"
+  device="$(control_device)"
+  iface="$(data_interface)"
+  present="false"
+  sim_status="missing"
+  connected="false"
+
+  if modem_present "${device}" "${iface}"; then
+    present="true"
+    sim_status="$(card_status "${device}")"
+    [ -n "$(iface_address "${iface}")" ] && connected="true"
+  fi
+
+  write_state "${enabled}" "${present}" "${connected}" "${sim_status}" ""
+}
+
+set_iface_metric() {
+  local iface="$1" new_metric="$2" routes gateway
+  routes="$(ip -4 route show default dev "${iface}" || true)"
+  [ -n "${routes}" ] || return 0
+  if printf '%s\n' "${routes}" | awk -v desired="${new_metric}" '
+    {
+      metric = "0"
+      for (i = 1; i <= NF; i++) {
+        if ($i == "metric") {
+          metric = $(i + 1)
+        }
+      }
+      if (metric == desired) {
+        found = 1
+      }
+    }
+    END { exit found ? 0 : 1 }
+  '; then
+    return 0
+  fi
+  gateway="$(printf '%s\n' "${routes}" | awk '{for(i=1;i<=NF;i++) if($i=="via"){print $(i+1);exit}}')"
+  while ip -4 route del default dev "${iface}" >/dev/null 2>&1; do :; done
+  if [ -n "${gateway}" ]; then
+    ip -4 route add default via "${gateway}" dev "${iface}" metric "${new_metric}" >/dev/null 2>&1 || true
+  else
+    ip -4 route add default dev "${iface}" metric "${new_metric}" >/dev/null 2>&1 || true
+  fi
+}
+
+verify_pin_if_needed() {
+  local device="$1" sim_status="$2" sim_pin
+  sim_pin="$(pin)"
+  [ "${sim_status}" = "locked" ] || return 0
+  [ -n "${sim_pin}" ] || return 0
+  log "cellular SIM PIN required; attempting PIN verification"
+  if qmi "${device}" --uim-verify-pin="PIN1,${sim_pin}" >/dev/null 2>&1; then
+    log "cellular SIM PIN verification accepted"
+  else
+    log "cellular SIM PIN verification failed"
+  fi
+}
+
+connect_cellular() {
+  local enabled device iface sim_status connect_apn user pass network_args qmi_ip_type metric start_output packet_handle
+  enabled="$(cellular_enabled)"
+  device="$(control_device)"
+  iface="$(data_interface)"
+  connect_apn="$(apn)"
+  user="$(username)"
+  pass="$(password)"
+  qmi_ip_type="$(ip_type)"
+  metric="$(route_metric)"
+
+  log "cellular connect requested enabled=${enabled} device=${device} interface=${iface} apn_set=$([ -n "${connect_apn}" ] && printf true || printf false) user_set=$([ -n "${user}" ] && printf true || printf false) ip_type=${qmi_ip_type} metric=${metric}"
+
+  if [ "${enabled}" != "true" ]; then
+    refresh_state
+    log "cellular disabled; not connecting"
+    return 0
+  fi
+
+  if ! modem_present "${device}" "${iface}"; then
+    write_state "${enabled}" "false" "false" "missing" "SIM7600 modem interface not present"
+    log "cellular modem not present (${device}/${iface})"
+    return 1
+  fi
+
+  if [ -z "${connect_apn}" ]; then
+    sim_status="$(card_status "${device}")"
+    write_state "${enabled}" "true" "false" "${sim_status}" "Cellular APN is not configured"
+    log "cellular enabled but APN is not configured"
+    return 0
+  fi
+
+  sim_status="$(card_status "${device}")"
+  log "cellular SIM status before PIN handling: ${sim_status}"
+  verify_pin_if_needed "${device}" "${sim_status}"
+  sim_status="$(card_status "${device}")"
+  log "cellular SIM status after PIN handling: ${sim_status}"
+  if [ "${sim_status}" != "ready" ] && [ "${sim_status}" != "present" ]; then
+    write_state "${enabled}" "true" "false" "${sim_status}" "SIM is not ready"
+    log "cellular SIM not ready: ${sim_status}"
+    return 1
+  fi
+
+  ip link set "${iface}" down >/dev/null 2>&1 || true
+  if [ -w "/sys/class/net/${iface}/qmi/raw_ip" ]; then
+    printf 'Y\n' > "/sys/class/net/${iface}/qmi/raw_ip" 2>/dev/null || true
+    log "cellular configured ${iface} for QMI raw_ip mode"
+  else
+    log "cellular raw_ip control not available for ${iface}; continuing"
+  fi
+  ip addr flush dev "${iface}" >/dev/null 2>&1 || true
+  ip link set "${iface}" up
+
+  network_args="apn=${connect_apn},ip-type=${qmi_ip_type}"
+  if [ -n "${user}" ]; then
+    network_args="${network_args},username=${user}"
+  fi
+  if [ -n "${pass}" ]; then
+    network_args="${network_args},password=${pass},auth=BOTH"
+  fi
+
+  log "cellular starting QMI data session apn=${connect_apn} ip_type=${qmi_ip_type}"
+  if ! start_output="$(qmi "${device}" --wds-start-network="${network_args}" --client-no-release-cid 2>&1)"; then
+    write_state "${enabled}" "true" "false" "${sim_status}" "${start_output}"
+    log "cellular QMI start failed: $(printf '%s' "${start_output}" | one_line)"
+    return 1
+  fi
+  packet_handle="$(printf '%s\n' "${start_output}" | awk -F"'" '/Packet data handle/ {print $2; exit}')"
+  if [ -n "${packet_handle}" ]; then
+    {
+      printf 'PACKET_HANDLE=%s\n' "${packet_handle}"
+      printf 'CONNECT_TIMESTAMP=%q\n' "$(date --iso-8601=seconds)"
+      printf 'RX_BASE=%s\n' "$(iface_stat "${iface}" rx_bytes)"
+      printf 'TX_BASE=%s\n' "$(iface_stat "${iface}" tx_bytes)"
+    } > "${CELLULAR_SESSION_FILE}"
+    log "cellular QMI data session started packet_handle=${packet_handle}"
+  else
+    log "cellular QMI data session started without packet handle in output"
+  fi
+
+  log "cellular requesting DHCP lease on ${iface}"
+  if ! udhcpc -q -n -i "${iface}" -t 5 -T 5 >/tmp/gateway-cellular-qmi-dhcp.log 2>&1; then
+    write_state "${enabled}" "true" "false" "${sim_status}" "$(cat /tmp/gateway-cellular-qmi-dhcp.log)"
+    log "cellular DHCP failed: $(one_line < /tmp/gateway-cellular-qmi-dhcp.log)"
+    return 1
+  fi
+
+  set_iface_metric "${iface}" "${metric}"
+  write_state "${enabled}" "true" "true" "${sim_status}" "" "connect"
+  log "cellular connected on ${iface} address=$(iface_address "${iface}") gateway=$(iface_gateway "${iface}") internet_ok=$(internet_ok "${iface}" && printf true || printf false)"
+}
+
+disconnect_cellular() {
+  local enabled device iface sim_status packet_handle
+  enabled="$(cellular_enabled)"
+  device="$(control_device)"
+  iface="$(data_interface)"
+  sim_status="missing"
+  if modem_present "${device}" "${iface}"; then
+    sim_status="$(card_status "${device}")"
+    packet_handle=""
+    if [ -f "${CELLULAR_SESSION_FILE}" ]; then
+      # shellcheck disable=SC1090
+      . "${CELLULAR_SESSION_FILE}" >/dev/null 2>&1 || true
+      packet_handle="${PACKET_HANDLE:-}"
+    fi
+    if [ -n "${packet_handle}" ]; then
+      log "cellular stopping QMI data session packet_handle=${packet_handle}"
+      qmi "${device}" --wds-stop-network="${packet_handle}" >/dev/null 2>&1 || true
+      rm -f "${CELLULAR_SESSION_FILE}"
+    fi
+    ip addr flush dev "${iface}" >/dev/null 2>&1 || true
+    ip link set "${iface}" up >/dev/null 2>&1 || true
+    write_state "${enabled}" "true" "false" "${sim_status}" "" "disconnect"
+  else
+    write_state "${enabled}" "false" "false" "${sim_status}" "" "disconnect"
+  fi
+  log "cellular disconnected"
+}
+
+cmd="${1:-status}"
+case "${cmd}" in
+  status|refresh-state)
+    refresh_state
+    cat "${CELLULAR_STATE_FILE}"
+    ;;
+  connect)
+    connect_cellular
+    ;;
+  disconnect)
+    disconnect_cellular
+    ;;
+  *)
+    cat <<'EOF'
+Usage:
+  gateway-cellular-qmi status
+  gateway-cellular-qmi refresh-state
+  gateway-cellular-qmi connect
+  gateway-cellular-qmi disconnect
+EOF
+    exit 1
+    ;;
+esac

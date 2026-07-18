@@ -1,0 +1,43 @@
+#!/bin/bash
+set -euo pipefail
+
+BASE_DIR="/opt/metacrust"
+STATE_FILE="${BASE_DIR}/state/network/state.json"
+RESULT_FILE="${BASE_DIR}/state/network/apply-result.json"
+CELLULAR_STATE_FILE="${BASE_DIR}/state/network/cellular-state.json"
+SCRIPTS_DIR="${BASE_DIR}/scripts"
+
+cmd="${1:-}"
+
+case "${cmd}" in
+  apply)
+    exec systemctl restart gateway-network-apply.service
+    ;;
+  state)
+    exec cat "${STATE_FILE}"
+    ;;
+  result)
+    exec cat "${RESULT_FILE}"
+    ;;
+  scan-wifi)
+    exec "${SCRIPTS_DIR}/gateway-network-scan.sh" "${2:-wlan0}"
+    ;;
+  cellular)
+    exec "${SCRIPTS_DIR}/gateway-cellular-qmi" "${2:-status}"
+    ;;
+  cellular-state)
+    exec cat "${CELLULAR_STATE_FILE}"
+    ;;
+  *)
+    cat <<'EOF'
+Usage:
+  gateway-networkctl apply
+  gateway-networkctl state
+  gateway-networkctl result
+  gateway-networkctl scan-wifi [iface]
+  gateway-networkctl cellular [status|refresh-state|connect|disconnect]
+  gateway-networkctl cellular-state
+EOF
+    exit 1
+    ;;
+esac

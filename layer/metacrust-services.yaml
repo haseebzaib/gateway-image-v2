@@ -2,7 +2,7 @@
 # X-Env-Layer-Name: metacrust-services
 # X-Env-Layer-Category: metacrust
 # X-Env-Layer-Desc: MetaCrust gateway_core and gateway_hub service placeholders
-# X-Env-Layer-Requires: metacrust-layout,metacrust-network-actuators
+# X-Env-Layer-Requires: metacrust-layout,metacrust-network-runtime
 # METAEND
 ---
 mmdebstrap:

@@ -1,6 +1,15 @@
 [Match]
 Name=eth0
 
+[Link]
+MTUBytes=1500
+
 [Network]
 DHCP=yes
-IPv6AcceptRA=yes
+MulticastDNS=no
+LinkLocalAddressing=ipv6
+
+[DHCPv4]
+RouteMetric=100
+UseDNS=yes
+UseDomains=no

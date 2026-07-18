@@ -1,0 +1,29 @@
+# METABEGIN
+# X-Env-Layer-Name: metacrust-network-runtime
+# X-Env-Layer-Category: metacrust
+# X-Env-Layer-Desc: MetaCrust network apply, monitoring, failover, Wi-Fi, and cellular runtime
+# X-Env-Layer-Requires: metacrust-layout
+# METAEND
+---
+mmdebstrap:
+  customize-hooks:
+    - |-
+      set -eu
+      install -d -m 0755 "$1/usr/share/metacrust/network"
+      install -d -m 0755 "$1/persistent/metacrust/config/network"
+      install -d -m 0755 "$1/persistent/metacrust/state/network"
+
+      install -D -m 0644 "$SRCROOT/system_related/network/default-network-settings.json" "$1/usr/share/metacrust/network/defaults.json"
+      install -D -m 0755 "$SRCROOT/system_related/network/gateway-network-apply.sh" "$1/opt/metacrust/scripts/gateway-network-apply.sh"
+      install -D -m 0755 "$SRCROOT/system_related/network/gateway-network-monitor.sh" "$1/opt/metacrust/scripts/gateway-network-monitor.sh"
+      install -D -m 0755 "$SRCROOT/system_related/network/gateway-network-scan.sh" "$1/opt/metacrust/scripts/gateway-network-scan.sh"
+      install -D -m 0755 "$SRCROOT/system_related/network/gateway-cellular-qmi" "$1/opt/metacrust/scripts/gateway-cellular-qmi"
+      install -D -m 0755 "$SRCROOT/system_related/network/gateway-networkctl" "$1/opt/metacrust/scripts/gateway-networkctl"
+
+      # Keep the low-level command for diagnostics and future gateway_core use.
+      install -D -m 0755 "$SRCROOT/system_related/network/metacrust-netctl" "$1/opt/metacrust/scripts/metacrust-netctl"
+      install -D -m 0644 "$SRCROOT/system_related/network/10-metacrust-eth0.network" "$1/etc/systemd/network/10-metacrust-eth0.network"
+      install -D -m 0644 "$SRCROOT/system_related/network/11-metacrust-eth1.network" "$1/etc/systemd/network/11-metacrust-eth1.network"
+      install -D -m 0644 "$SRCROOT/system_related/network/gateway-network-apply.service" "$1/etc/systemd/system/gateway-network-apply.service"
+      install -D -m 0644 "$SRCROOT/system_related/network/gateway-network-monitor.service" "$1/etc/systemd/system/gateway-network-monitor.service"
+    - $BDEBSTRAP_HOOKS/enable-units "$1" systemd-networkd systemd-resolved wpa_supplicant ModemManager gateway-network-apply gateway-network-monitor
