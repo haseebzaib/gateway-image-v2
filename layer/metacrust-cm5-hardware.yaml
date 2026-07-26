@@ -16,9 +16,11 @@ mmdebstrap:
       install -D -m 0755 "$SRCROOT/system_related/hardware/gateway-cm5-boot-chirp.sh" "$1/opt/metacrust/scripts/gateway-cm5-boot-chirp.sh"
       install -D -m 0755 "$SRCROOT/system_related/hardware/gateway-cm5-rtc-load.sh" "$1/opt/metacrust/scripts/gateway-cm5-rtc-load.sh"
       install -D -m 0755 "$SRCROOT/system_related/hardware/gateway-cm5-rtc-save.sh" "$1/opt/metacrust/scripts/gateway-cm5-rtc-save.sh"
+      install -D -m 0755 "$SRCROOT/system_related/hardware/gateway-cm5-led-monitor.sh" "$1/opt/metacrust/scripts/gateway-cm5-led-monitor.sh"
       install -D -m 0644 "$SRCROOT/system_related/hardware/gateway-cm5-boot-chirp.service" "$1/etc/systemd/system/gateway-cm5-boot-chirp.service"
       install -D -m 0644 "$SRCROOT/system_related/hardware/gateway-cm5-rtc-load.service" "$1/etc/systemd/system/gateway-cm5-rtc-load.service"
       install -D -m 0644 "$SRCROOT/system_related/hardware/gateway-cm5-rtc-save.service" "$1/etc/systemd/system/gateway-cm5-rtc-save.service"
+      install -D -m 0644 "$SRCROOT/system_related/hardware/gateway-cm5-led-monitor.service" "$1/etc/systemd/system/gateway-cm5-led-monitor.service"
       config="$1/boot/firmware/config.txt"
       if ! grep -q 'BEGIN MetaCrust CM5 hardware' "$config"; then
         printf '\n# BEGIN MetaCrust CM5 hardware\n' >> "$config"
@@ -32,4 +34,4 @@ mmdebstrap:
       fi
       cmdline="$1/boot/firmware/cmdline.txt"
       sed -i 's/console=serial0,115200 //g' "$cmdline"
-    - $BDEBSTRAP_HOOKS/enable-units "$1" gateway-cm5-rtc-load gateway-cm5-rtc-save gateway-cm5-boot-chirp
+    - $BDEBSTRAP_HOOKS/enable-units "$1" gateway-cm5-rtc-load gateway-cm5-rtc-save gateway-cm5-boot-chirp gateway-cm5-led-monitor

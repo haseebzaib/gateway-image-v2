@@ -20,13 +20,17 @@ Usage:
   gateway-cm5-ioctl out1 on|off
   gateway-cm5-ioctl out2 on|off
   gateway-cm5-ioctl buzzer on|off|chirp
-  gateway-cm5-ioctl user1 on|off
-  gateway-cm5-ioctl user2 on|off
+  gateway-cm5-ioctl user1 on|off|blink [heartbeat|fault|off]
+  gateway-cm5-ioctl user2 on|off|blink [heartbeat|fault|off]
 
 Notes:
   - IN1/IN2 are electrically inverted by the carrier.
   - OUT1/OUT2 are open-drain and electrically inverted by the carrier.
   - BUZZER, USER1, USER2 are active-low.
+  - "blink" runs in the foreground forever (Ctrl-C / signal to stop):
+      heartbeat = slow ~1 Hz blink, service is healthy/running
+      fault     = rapid ~4 Hz blink, service has a problem
+      off       = turn the LED off and return immediately
 EOF
 }
 
@@ -99,6 +103,39 @@ set_open_drain_output() {
   esac
 }
 
+blink_led() {
+  local gpio="$1"
+  local pattern="${2:-heartbeat}"
+  local on_ms off_ms
+
+  case "${pattern}" in
+    heartbeat)
+      on_ms=500
+      off_ms=500
+      ;;
+    fault)
+      on_ms=120
+      off_ms=120
+      ;;
+    off)
+      configure_output_high "${gpio}"
+      return
+      ;;
+    *)
+      echo "invalid pattern: ${pattern} (expected heartbeat|fault|off)" >&2
+      exit 1
+      ;;
+  esac
+
+  trap 'configure_output_high "${gpio}"; exit 0' INT TERM
+  while true; do
+    configure_output_low "${gpio}"
+    sleep "0.$(printf '%03d' "${on_ms}")"
+    configure_output_high "${gpio}"
+    sleep "0.$(printf '%03d' "${off_ms}")"
+  done
+}
+
 chirp_buzzer() {
   local on_ms="${1:-90}"
   local off_ms="${2:-70}"
@@ -155,10 +192,24 @@ main() {
       esac
       ;;
     user1)
-      set_active_low "${USER1_GPIO}" "${2:-}"
+      case "${2:-}" in
+        blink)
+          blink_led "${USER1_GPIO}" "${3:-heartbeat}"
+          ;;
+        *)
+          set_active_low "${USER1_GPIO}" "${2:-}"
+          ;;
+      esac
       ;;
     user2)
-      set_active_low "${USER2_GPIO}" "${2:-}"
+      case "${2:-}" in
+        blink)
+          blink_led "${USER2_GPIO}" "${3:-heartbeat}"
+          ;;
+        *)
+          set_active_low "${USER2_GPIO}" "${2:-}"
+          ;;
+      esac
       ;;
     *)
       usage

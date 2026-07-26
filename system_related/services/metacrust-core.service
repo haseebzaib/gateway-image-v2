@@ -1,7 +1,7 @@
 [Unit]
 Description=MetaCrust C++ gateway core
-After=metacrust-layout.service network-online.target
-Wants=metacrust-layout.service network-online.target
+After=metacrust-layout.service metacrust-hub.service network-online.target
+Wants=metacrust-layout.service metacrust-hub.service network-online.target
 ConditionFileIsExecutable=/opt/metacrust/gateway_core/gateway-core
 
 [Service]

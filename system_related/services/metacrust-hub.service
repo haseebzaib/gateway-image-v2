@@ -1,7 +1,8 @@
 [Unit]
 Description=MetaCrust Python gateway hub
-After=metacrust-layout.service metacrust-core.service
+After=metacrust-layout.service
 Wants=metacrust-layout.service
+Before=metacrust-core.service
 ConditionPathExists=/opt/metacrust/gateway_hub/main.py
 
 [Service]

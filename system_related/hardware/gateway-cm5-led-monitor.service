@@ -1,0 +1,13 @@
+[Unit]
+Description=MetaCrust status LED monitor (USER1=gateway_core, USER2=gateway_hub)
+After=metacrust-layout.service metacrust-hub.service metacrust-core.service
+ConditionFileIsExecutable=/opt/metacrust/scripts/gateway-cm5-ioctl
+
+[Service]
+Type=simple
+ExecStart=/opt/metacrust/scripts/gateway-cm5-led-monitor.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
